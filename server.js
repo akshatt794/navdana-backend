@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
-
 require("dotenv").config();
 
 require("./db.js");
@@ -14,28 +13,37 @@ const bannerroute = require("./routes/bannerroute.js");
 
 const app = express();
 
-//Security middleware
-app.use(helmet()); // sets secure HTTP headers to mitigate XSS, clickjacking, MIME sniffing, etc.
-
-// Middleware for parsing
+// security & parsing
+app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// trust proxy if you use cookies
+app.set('trust proxy', 1);
+
+// CORS allowlist (Netlify + custom domain)
+const allowlist = [
+  process.env.REACT_ORIGIN,
+  process.env.REACT_ORIGIN_2,
+  process.env.REACT_ORIGIN_3,
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.REACT_ORIGIN, // React app URL
-  credentials: true,                // allow cookies
+  origin: (origin, cb) => (!origin || allowlist.includes(origin) ? cb(null, true) : cb(new Error('CORS blocked: ' + origin))),
+  credentials: true,
 }));
 
-
-//Routes
+// routes
 app.use("/", loginroute);
 app.use("/", categoryroute);
 app.use("/", productroute);
 app.use("/", bannerroute);
 
-const PORT = process.env.LOCAL_PORT || 3000;
+// root & health
+app.get('/', (req, res) => res.json({ ok: true, service: 'navdana-backend', time: new Date().toISOString() }));
+app.get('/health', (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`Node server running on port ${PORT}`);
-});
+// IMPORTANT: use Render's PORT
+const PORT = process.env.PORT || process.env.LOCAL_PORT || 3000;
+app.listen(PORT, () => console.log(`Node server running on port ${PORT}`));
